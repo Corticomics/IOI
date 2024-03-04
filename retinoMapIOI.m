@@ -21,7 +21,7 @@ if selectedDirectory == 0
 end
 %% Convert to Function Inputs Later
 nStimLocs   = 5;
-nRepsPerLoc = 5;
+nRepsPerLoc = 19;
 % Can also Use Dir to Figure out number of trials = number of folders. 
 % S = dir(selectedDirectory);
 % nTrials = nnz(~ismember({S.name},{'.','..'})&[S.isdir]);
@@ -98,6 +98,30 @@ for trial = 1:nTrials
     % Concatenate frames along the fourth dimension
     session(:, :, :, trial) = current_trial;
 end  
+
+% clean up workspace to free RAM
+clear image_data frame_subset frame current_trial;
+
+%% Compress Data By Half By Averaging every 2 frames
+
+ogData = session;
+session = zeros(xPix, yPix, framesPerTrial/2, nTrials);
+
+counter = 1;
+
+for trialNum = 1:nTrials
+    for frameNum = 1:2:framesPerTrial
+        session(:,:,counter,trialNum) = ...
+            mean(ogData(:,:,frameNum,trialNum) + ogData(:,:,frameNum+1,trialNum),3);
+        counter = counter+1;
+    end
+end
+
+% Correct the counters for the lower frame rate
+nStimFrames = nStimFrames/2;
+framesPerTrial = framesPerTrial/2;
+frameRateHz = frameRateHz/2;
+
 
 %% Compute Df/F for stimOn vs. StimOff
 
