@@ -1,5 +1,5 @@
 function mapData = retinotopy(subjectID, nStimLocs, nRepsPerLoc, stimDurS, baselineDurS, stimSeconds, blSeconds)
-    % Intrinsic Signal Imaging Analysis Function
+    % Retinotopic Mapping Function
     % Inputs:
     % - subjectID: Identifier for the subject
     % - nStimLocs: Number of stimulus locations
@@ -140,5 +140,5 @@ function mapData = retinotopy(subjectID, nStimLocs, nRepsPerLoc, stimDurS, basel
     ylabel('Y-axis');
     hold off; 
 
-    saveas(gcf, [subjectID, '.png']);
+    saveas(gcf, [subjectID,'.png']);
 end
