@@ -1,4 +1,4 @@
-function mapData = retinotopy(subjectID, nStimLocs, nRepsPerLoc, stimDurS, baselineDurS, stimSeconds, blSeconds)
+function [mapData, session] = retinotopy(subjectID, nStimLocs, nRepsPerLoc, stimDurS, baselineDurS, respWindowS, blWindowS)
     % Retinotopic Mapping Function
     % Inputs:
     % - subjectID: Identifier for the subject
@@ -9,12 +9,14 @@ function mapData = retinotopy(subjectID, nStimLocs, nRepsPerLoc, stimDurS, basel
     % - stimSeconds: Number of seconds of the stimulus to be analyze (at the begining  of stimulus)
     % - blSeconds: Number of seconds of the baseline to be analyze (at the end of baseline)
     
+
     % Get User Input for location of data files
     selectedDirectory = uigetdir('Select the directory containing trial folders');
     % If user clicked 'Cancel'
     if selectedDirectory == 0
         error('User canceled folder selection');
     end
+
 
     % Parse info.txt for relevant info
     cd([selectedDirectory,'/',num2str(1)]);
@@ -28,18 +30,21 @@ function mapData = retinotopy(subjectID, nStimLocs, nRepsPerLoc, stimDurS, basel
     expTimeMS   = table2array(t(5,2));
     trialTimeS  = table2array(t(25,2));
 
+
     % Compute Basics for Analysis
     nTrials          = nStimLocs * nRepsPerLoc;
     framesPerTrial   = frameRateHz * trialTimeS;
     framesPerSession = framesPerTrial * nTrials;
-    % Use provided durations for stim and baseline
     nStimFrames      = frameRateHz * stimDurS;
     nBlFrames        = frameRateHz * baselineDurS;
 
+
+    % Preallocate Memory for session data
+    session = zeros(yPix, xPix, framesPerTrial, nTrials);
+
+  
     % Extract Imaging Frames
     cd(selectedDirectory);
-    trialFrames = zeros(nTrials,1);
-    session = zeros(yPix, xPix, framesPerTrial, nTrials);
 
     % Loop through all trials (all folders) 
     for trial = 1:nTrials
@@ -49,17 +54,23 @@ function mapData = retinotopy(subjectID, nStimLocs, nRepsPerLoc, stimDurS, basel
         if fId == -1
            error(['Could not open the file for trial ', num2str(trial)]);
         end
-
+       
+        % Read the file, skipping the first 22 values (header of the first frame)
         image_data = fread(fId, 'uint16');
+        fclose(fId);
         image_data = image_data(23:end);
        
+
+       % Remove the first 12 elements (header) from each frame 
         for i = 1:framesPerTrial-1
             startIndx = i * xPix * yPix + 1;
             image_data(startIndx : startIndx + 11) = [];
         end
-
+ 
+        % Initialize a 3D matrix to store all frames from this trial
         current_trial = zeros(yPix, xPix, framesPerTrial);
 
+        % Loop through all frames and store them in the 3D matrix
         for i = 1:framesPerTrial
             startIndx = (i - 1) * xPix * yPix + 1;
             frame_subset = image_data(startIndx : startIndx + xPix*yPix-1);
@@ -69,15 +80,14 @@ function mapData = retinotopy(subjectID, nStimLocs, nRepsPerLoc, stimDurS, basel
             current_trial(:,:,i) = frame; % Add the frame to the 3d matrix
         end
 
-        trialFrames(trial,:) = size(current_trial,3); 
         session(:, :, :, trial) = current_trial;
     end  
 
-    clear current_trial clear image_data i trialFrames
+    clear image_data current_trial
 
     % Compute Df/F for stimOn vs. StimOff
-    blFrames = (nBlFrames+1)-(blSeconds*frameRateHz) : nBlFrames; 
-    stimFrames = nBlFrames+1 : nBlFrames+(stimSeconds*frameRateHz); 
+    blFrames = (nBlFrames+1)-(blWindowS*frameRateHz) : nBlFrames; 
+    stimFrames = nBlFrames+1 : nBlFrames+(respWindowS*frameRateHz); 
 
     deltaF = zeros(yPix, xPix, nTrials);
 
@@ -87,58 +97,19 @@ function mapData = retinotopy(subjectID, nStimLocs, nRepsPerLoc, stimDurS, basel
         deltaF(:,:,trialNum) = (stimOn - stimOff) ./ stimOff; % deltaF/F
     end
 
-    % Average The Data Across Trials From Each Stimulus Location
+    % Average the data across trials for each stimulus location
     mapData = zeros(yPix, xPix, nStimLocs);
 
     for locNum = 1:nStimLocs
-        stimArray = zeros(xPix, yPix, nStimLocs);
-        n1 =  locNum;
-        n2 =  (locNum + 1 * nStimLocs);
-        n3 =  (locNum + 2 * nStimLocs);
-        n4 =  (locNum + 3 * nStimLocs);
-        n5 =  (locNum + 4 * nStimLocs);      
-        n6 =  (locNum + 5 * nStimLocs); 
-        n7 =  (locNum + 6 * nStimLocs); 
-        n8 =  (locNum + 7 * nStimLocs); 
-        n9 =  (locNum + 8 * nStimLocs); 
-        n10 = (locNum + 9 * nStimLocs);
-        n11 = (locNum + 10 * nStimLocs);
-        n12 = (locNum + 11 * nStimLocs);
-        n13 = (locNum + 12 * nStimLocs);
-        n14 = (locNum + 13 * nStimLocs);
-        n15 = (locNum + 14 * nStimLocs);
-        
-        stimArray = cat(3, deltaF(:,:,n1), deltaF(:,:,n2), deltaF(:,:,n3), deltaF(:,:,n4), deltaF(:,:,n5), ...
-            deltaF(:,:,n6), deltaF(:,:,n7), deltaF(:,:,n8), deltaF(:,:,n9), deltaF(:,:,n10), ...
-            deltaF(:,:,n11), deltaF(:,:,n12), deltaF(:,:,n13), deltaF(:,:,n14), deltaF(:,:,n15));
-        
-        mapData(:,:,locNum) = mean(stimArray,3);
+        % initialize the master array for this location
+        stimArray = zeros(yPix, xPix, nRepsPerLoc);
+        for n = 1:nRepsPerLoc 
+            % indices for deltaF's that correspond to the current locNum
+            idx = (locNum + (n - 1) * nStimLocs);   
+            % Combine data for this location
+            stimArray(:,:,n) = deltaF(:,:,idx);
+        end 
+        % Assign Mean of the trials to Output
+        mapData(:,:,locNum) = mean(stimArray, 3);
     end
-
-    % Show Results Along with Average Image of Window
-    avgImage = mean(mean(session, 3), 4); 
-    avgImage = imgaussfilt(avgImage);
-
-    figure('Position',[10 10 750 1500]);
-    hold on;
-    for locNum = 1:nStimLocs
-        subplot(2, 3, locNum);
-        imagesc(imgaussfilt(mapData(:,:,locNum),0.5));
-        colormap('gray');
-        colorbar;
-        title(['Stimulus Location ', num2str(locNum)]);
-        xlabel('X-axis'); 
-        ylabel('Y-axis');
-    end
-
-    subplot(2, 3, 6);
-    imagesc(avgImage);
-    colormap('gray'); 
-    colorbar;
-    title('Reference Image');
-    xlabel('X-axis');
-    ylabel('Y-axis');
-    hold off; 
-
-    saveas(gcf, [subjectID,'.png']);
 end
