@@ -1,4 +1,4 @@
-function [mapData, session] = retinotopy(subjectID, nStimLocs, nRepsPerLoc, stimDurS, baselineDurS, respWindowS, blWindowS)
+function [mapData, session, deltaF] = retinotopy(subjectID, nStimLocs, nRepsPerLoc, stimDurS, baselineDurS, respWindowS, blWindowS)
     % Retinotopic Mapping Function
     % Inputs:
     % - subjectID: Identifier for the subject
