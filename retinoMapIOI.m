@@ -21,7 +21,7 @@ if selectedDirectory == 0
 end
 %% Convert to Function Inputs Later
 nStimLocs   = 5;
-nRepsPerLoc = 19;
+nRepsPerLoc = 15;
 % Can also Use Dir to Figure out number of trials = number of folders. 
 % S = dir(selectedDirectory);
 % nTrials = nnz(~ismember({S.name},{'.','..'})&[S.isdir]);
@@ -102,32 +102,11 @@ end
 % clean up workspace to free RAM
 clear image_data frame_subset frame current_trial;
 
-%% Compress Data By Half By Averaging every 2 frames
-
-ogData = session;
-session = zeros(xPix, yPix, framesPerTrial/2, nTrials);
-
-counter = 1;
-
-for trialNum = 1:nTrials
-    for frameNum = 1:2:framesPerTrial
-        session(:,:,counter,trialNum) = ...
-            mean(ogData(:,:,frameNum,trialNum) + ogData(:,:,frameNum+1,trialNum),3);
-        counter = counter+1;
-    end
-end
-
-% Correct the counters for the lower frame rate
-nStimFrames = nStimFrames/2;
-framesPerTrial = framesPerTrial/2;
-frameRateHz = frameRateHz/2;
-
-
 %% Compute Df/F for stimOn vs. StimOff
 
 % For extracting stim v bl frames
-stimFrames = 1:nStimFrames;
-blFrames   = nStimFrames+frameRateHz+1:framesPerTrial; % Omit first second of baseline
+blFrames     = 1:nBlFrames;                  % 5 Second BL  
+stimFrames   = nStimFrames+1:framesPerTrial; % 5 Second Stimulus 
 
 % Initialize a 3D matrix to store differences for each trial
 deltaF = zeros(xPix,yPix,nTrials);
@@ -141,24 +120,15 @@ end
 
 %% Average The Data Across Trials From Each Stimulus Location
 
-% Initialize a 3D matrix to store average deltaF for each stimulus location
+% mapData: xPix-by-yPix-by-nStimLocs
 mapData = zeros(xPix, yPix, nStimLocs);
 
 for locNum = 1:nStimLocs
-    % initialize the master array for this location
-    stimArray = zeros(xPix, yPix, nStimLocs);
-    % indicies for deltaF that correspond to the current stimLoc
-    n1 = locNum;                     % Trial 1
-    n2 = (locNum + nRepsPerLoc);     % Trial 2
-    n3 = (locNum + 2*nRepsPerLoc);   % Trial 3
-    n4 = (locNum + 3*nRepsPerLoc);   % Trial 4
-    n5 = (locNum + 4*nRepsPerLoc);   % Trial 5
-    
-    % Combine data for this location
-    stimArray = cat(3,deltaF(:,:,n1),deltaF(:,:,n2),...
-        deltaF(:,:,n3),deltaF(:,:,n4),deltaF(:,:,n5));
-    % Assign Mean of the trials to Output
-    mapData(:,:,locNum) = mean(stimArray,3);
+    % indices of deltaF trials corresponding to this stimulus location
+    idx = locNum + (0:nRepsPerLoc-1) * nStimLocs;
+
+    % average across repeats (3rd dim of deltaF is "trial")
+    mapData(:,:,locNum) = mean(deltaF(:,:,idx), 3);
 end
 
 %% Show Results Along with Average Image of Window
@@ -174,6 +144,7 @@ for locNum = 1:nStimLocs
     imagesc(deltaF(:,:,locNum));
     colormap;
     colorbar('viridis');
+    clim([-0.02 0.01])
     title(['Stimulus Location ', num2str(locNum)]);
     xlabel('X-axis'); % Will need to update these to A-P and M-L
     ylabel('Y-axis');
