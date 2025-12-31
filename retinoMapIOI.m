@@ -144,7 +144,7 @@ for locNum = 1:nStimLocs
     imagesc(deltaF(:,:,locNum));
     colormap;
     colorbar('viridis');
-    clim([-0.02 0.01])
+    clim([-0.02 0.015])
     title(['Stimulus Location ', num2str(locNum)]);
     xlabel('X-axis'); % Will need to update these to A-P and M-L
     ylabel('Y-axis');
